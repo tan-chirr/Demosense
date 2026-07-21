@@ -1,0 +1,5 @@
+state_name,county_name,club_name,first_name,last_name,email,phone,position_code
+California,Santa Barbara,Goleta Democratic Club,Jane,Smith,jane.smith@example.com,805-555-0101,president
+California,Santa Barbara,Goleta Democratic Club,Miguel,Alvarez,miguel.alvarez@example.com,805-555-0102,treasurer
+California,Santa Barbara,Goleta Democratic Club,Priya,Desai,priya.desai@example.com,,member
+California,Santa Barbara,Montecito Democratic Club,Tom,Lee,tom.lee@example.com,805-555-0201,president
