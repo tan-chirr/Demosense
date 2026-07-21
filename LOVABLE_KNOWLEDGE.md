@@ -16,10 +16,10 @@ build — this is the read-side dashboard).
 
 ## Backend
 
-Base URL: `<FILL IN AFTER RAILWAY DEPLOY>`
+Base URL: `https://web-production-ec400.up.railway.app`
 
 Full interactive API docs (every endpoint, every schema, try-it-out) are
-live at `<BASE_URL>/docs` — read that first, it is the source of truth over
+live at `https://web-production-ec400.up.railway.app/docs` — read that first, it is the source of truth over
 this document if they ever disagree.
 
 ## Auth
