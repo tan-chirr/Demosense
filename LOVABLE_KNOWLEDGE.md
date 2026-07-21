@@ -90,14 +90,30 @@ as "start from any node, they can see everything."
 
 ```
 POST /auth/jwt/login                                # see Auth above
+POST /auth/register                                  # {email, password, first_name, last_name}
+GET  /users/me                                       # {is_superuser, ...} - check admin status
 GET  /role-grants/me                                 # discover your own accessible org unit(s)
 GET  /org-units/{unit_id}                            # one org unit
 GET  /org-units/{unit_id}/subtree                     # it + every descendant (tree view)
 GET  /org-units/{unit_id}/members                     # active members at/below this node
 GET  /surveys                                         # list of open surveys
 GET  /surveys/{survey_id}                              # full definition incl. all questions
+POST /surveys/{survey_id}/responses                    # start a response {org_unit_id, anonymous}
+PATCH /responses/{response_id}/answers                 # save answers, partial saves OK
+POST /responses/{response_id}/submit                   # finalize a response
 GET  /org-units/{unit_id}/aggregates?survey_id=...     # rollup results, one row per question
+
+Superuser-only (used by the "Approve users" screen):
+GET  /people?pending_only=true                         # accounts with no role grant yet
+GET  /people?q=<search>                                 # search by name/email substring
+GET  /role-grants?person_id=...                         # what a specific person already has
+POST /role-grants                                       # {person_id, role, org_unit_id}
 ```
+
+`role` for `POST /role-grants` is one of: `member`, `club_admin`,
+`county_admin`, `state_admin`, `national_admin`, `superuser`. A
+non-superuser role needs exactly one of `org_unit_id`/`org_group_id`; a
+`superuser` grant needs neither (omit both).
 
 `GET .../aggregates` response shape (one array element per question):
 
@@ -125,24 +141,28 @@ GET  /org-units/{unit_id}/aggregates?survey_id=...     # rollup results, one row
 
 ## Scope for this build
 
-Two views only. Don't build more than this — a smaller number of clean
-screens beats a partial fourth one.
-
 1. **Org tree browser** — after login, call `GET /role-grants/me` to find the
    user's accessible org unit(s), then `GET /org-units/{id}/subtree` from
    there to render the hierarchy. Click into a node to see its members
    (`GET /org-units/{id}/members`) and jump to survey results for that node.
+   Only shown in nav if the user has a role grant or is superuser.
 2. **Survey results** — pick an open survey (`GET /surveys`), pick an org
    node, show one chart per question using `GET /org-units/{id}/aggregates`:
    bar/histogram for ordinal & numeric, pie/bar for choice questions,
    simple stat tiles for boolean. Show `respondent_n` prominently everywhere
    — a low response count changes how a number should be read.
+3. **Survey response form** — any logged-in user, regardless of role grants,
+   can fill these out. Never gate this behind having a role grant.
+4. **Approve users** (superuser only) — list pending accounts
+   (`GET /people?pending_only=true`), pick one, pick a role and an org unit
+   (search `GET /org-units/{root}/subtree`), call `POST /role-grants`. Only
+   show this screen/nav item when `GET /users/me` says `is_superuser: true`.
 
-Explicitly **not** in scope for this build: a club-health trend line (no
-historical rollup snapshots exist yet to trend against), a roster
-create/edit UI, maps, and anything from the org overview beyond these two
-survey/org views (wiki, social layer, opposition monitoring, etc. — deferred
-by the project's own plan).
+Explicitly **not** in scope: a club-health trend line (no historical
+rollup snapshots exist yet to trend against), a roster create/edit UI,
+maps, and anything from the org overview beyond these four views (wiki,
+social layer, opposition monitoring, etc. — deferred by the project's
+own plan).
 
 ## Tech
 
