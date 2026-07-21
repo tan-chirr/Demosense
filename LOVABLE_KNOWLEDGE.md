@@ -50,6 +50,24 @@ Registration: `POST /auth/register` with
 can see nothing until a superuser grants one — that's expected, not a bug
 to route around.
 
+**Discovering the logged-in user's home node(s):** there is no
+`home_org_unit` field on the user object — access comes from role grants,
+not one fixed node. After login, call `GET /role-grants/me` (bearer auth,
+returns only the caller's own grants) to get a list of
+`{role, org_unit_id, org_group_id}`. Usually one row. Use its `org_unit_id`
+as the root for the org tree browser. A superuser has zero rows in this
+list but `is_superuser: true` on `GET /users/me` — treat that combination
+as "start from any node, they can see everything."
+
+**Test accounts** (already granted real roles, safe to build against):
+- `demo_county_admin@democlub.dev` / `CountyDemo123!` — county_admin, scoped
+  to Santa Barbara county (sees that county + its 2 clubs)
+- `demo_state_admin@democlub.dev` / `StateDemo123!` — state_admin, scoped to
+  California (sees the whole state, including Santa Barbara county and below)
+- `rbac-test-superuser@democlub.dev` / `RbacTestSuper123!` — superuser, sees
+  everything everywhere (use this to sanity-check the "no role grants but
+  is_superuser" case)
+
 ## Non-negotiable rules
 
 1. **Access control is entirely server-side.** A 403 means the logged-in
@@ -72,6 +90,7 @@ to route around.
 
 ```
 POST /auth/jwt/login                                # see Auth above
+GET  /role-grants/me                                 # discover your own accessible org unit(s)
 GET  /org-units/{unit_id}                            # one org unit
 GET  /org-units/{unit_id}/subtree                     # it + every descendant (tree view)
 GET  /org-units/{unit_id}/members                     # active members at/below this node
@@ -109,10 +128,9 @@ GET  /org-units/{unit_id}/aggregates?survey_id=...     # rollup results, one row
 Two views only. Don't build more than this — a smaller number of clean
 screens beats a partial fourth one.
 
-1. **Org tree browser** — navigate the hierarchy starting from whatever
-   node(s) the logged-in user has access to (call `GET /org-units/{id}/subtree`
-   from their home node, or just start from a known root and let 403s tell
-   you the boundary). Click into a node to see its members
+1. **Org tree browser** — after login, call `GET /role-grants/me` to find the
+   user's accessible org unit(s), then `GET /org-units/{id}/subtree` from
+   there to render the hierarchy. Click into a node to see its members
    (`GET /org-units/{id}/members`) and jump to survey results for that node.
 2. **Survey results** — pick an open survey (`GET /surveys`), pick an org
    node, show one chart per question using `GET /org-units/{id}/aggregates`:
