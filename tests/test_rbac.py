@@ -146,3 +146,42 @@ async def test_county_admin_blocked_from_creating_club_in_other_county(client, t
 async def test_unauthenticated_request_is_rejected(client, two_counties):
     resp = await client.get(f"/org-units/{two_counties['county_a_id']}")
     assert resp.status_code == 401
+
+
+async def test_my_role_grants_returns_own_scope_only(client, two_counties):
+    resp = await client.get(
+        "/role-grants/me", headers={"Authorization": f"Bearer {two_counties['token_a']}"}
+    )
+    assert resp.status_code == 200
+    grants = resp.json()
+    assert len(grants) == 1
+    assert grants[0]["org_unit_id"] == two_counties["county_a_id"]
+    assert grants[0]["role"] == "county_admin"
+    assert grants[0]["person_id"] == two_counties["person_a_id"]
+
+
+async def test_my_role_grants_empty_for_ungranted_user(client, two_counties):
+    resp = await client.post(
+        "/auth/register",
+        json={
+            "email": f"norole_{uuid.uuid4().hex[:8]}@democlub.dev",
+            "password": "NoRolePass123!",
+            "first_name": "No",
+            "last_name": "Role",
+        },
+    )
+    assert resp.status_code == 201
+    person_id = resp.json()["id"]
+    login = await client.post(
+        "/auth/jwt/login",
+        data={"username": resp.json()["email"], "password": "NoRolePass123!"},
+    )
+    token = login.json()["access_token"]
+
+    resp = await client.get("/role-grants/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    async with SessionLocal() as session:
+        await session.execute(delete(Person).where(Person.id == person_id))
+        await session.commit()

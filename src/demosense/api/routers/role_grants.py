@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from demosense.auth import current_superuser
+from demosense.auth import current_active_person, current_superuser
 from demosense.db import get_session
 from demosense.models.auth import AppRole, RoleGrant
 from demosense.models.org import OrgGroup, OrgUnit
@@ -12,6 +13,22 @@ from demosense.services.audit import log_action
 # Granting a role is the most sensitive write in the system - restricted to
 # superuser only for v1 rather than letting admins delegate sub-roles.
 router = APIRouter(prefix="/role-grants", tags=["role-grants"])
+
+
+@router.get("/me", response_model=list[RoleGrantRead])
+async def get_my_role_grants(
+    actor: Person = Depends(current_active_person),
+    session: AsyncSession = Depends(get_session),
+):
+    """A client's only way to discover "what org unit(s) can this logged-in
+    user see" - there's no home_org_unit field on the user object itself,
+    since a person's access comes from their role grants, not a single
+    fixed home node. A superuser has none of these and should just treat
+    that as "see everything" (is_superuser on /users/me already says so).
+    """
+    return list(
+        await session.scalars(select(RoleGrant).where(RoleGrant.person_id == actor.id))
+    )
 
 
 @router.post("", response_model=RoleGrantRead, status_code=201, dependencies=[Depends(current_superuser)])
