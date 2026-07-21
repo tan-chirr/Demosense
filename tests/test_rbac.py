@@ -185,3 +185,59 @@ async def test_my_role_grants_empty_for_ungranted_user(client, two_counties):
     async with SessionLocal() as session:
         await session.execute(delete(Person).where(Person.id == person_id))
         await session.commit()
+
+
+async def test_list_people_pending_only_and_superuser_gate(client, two_counties, superuser_token):
+    resp = await client.post(
+        "/auth/register",
+        json={
+            "email": f"pending_{uuid.uuid4().hex[:8]}@democlub.dev",
+            "password": "PendingPass123!",
+            "first_name": "Pending",
+            "last_name": "Person",
+        },
+    )
+    assert resp.status_code == 201
+    pending_id = resp.json()["id"]
+
+    # non-superuser is rejected
+    resp = await client.get(
+        "/people", params={"pending_only": True},
+        headers={"Authorization": f"Bearer {two_counties['token_a']}"},
+    )
+    assert resp.status_code == 403
+
+    resp = await client.get(
+        "/people",
+        params={"pending_only": True},
+        headers={"Authorization": f"Bearer {superuser_token}"},
+    )
+    assert resp.status_code == 200
+    ids = {p["id"] for p in resp.json()}
+    assert pending_id in ids
+    # county_admin/state_admin from two_counties fixture already have a
+    # role grant, so they must NOT show up as pending
+    assert two_counties["person_a_id"] not in ids
+
+    async with SessionLocal() as session:
+        await session.execute(delete(Person).where(Person.id == pending_id))
+        await session.commit()
+
+
+async def test_list_role_grants_filters_by_person(client, two_counties, superuser_token):
+    resp = await client.get(
+        "/role-grants",
+        params={"person_id": two_counties["person_a_id"]},
+        headers={"Authorization": f"Bearer {superuser_token}"},
+    )
+    assert resp.status_code == 200
+    grants = resp.json()
+    assert len(grants) == 1
+    assert grants[0]["person_id"] == two_counties["person_a_id"]
+
+    # non-superuser is rejected
+    resp = await client.get(
+        "/role-grants",
+        headers={"Authorization": f"Bearer {two_counties['token_a']}"},
+    )
+    assert resp.status_code == 403

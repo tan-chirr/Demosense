@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +31,22 @@ async def get_my_role_grants(
     return list(
         await session.scalars(select(RoleGrant).where(RoleGrant.person_id == actor.id))
     )
+
+
+@router.get("", response_model=list[RoleGrantRead], dependencies=[Depends(current_superuser)])
+async def list_role_grants(
+    person_id: uuid.UUID | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    """Superuser only - browse existing grants, optionally for one person
+    (so an approval screen can show "this person already has X" before
+    granting more).
+    """
+    stmt = select(RoleGrant)
+    if person_id is not None:
+        stmt = stmt.where(RoleGrant.person_id == person_id)
+    stmt = stmt.order_by(RoleGrant.granted_at.desc()).limit(200)
+    return list(await session.scalars(stmt))
 
 
 @router.post("", response_model=RoleGrantRead, status_code=201, dependencies=[Depends(current_superuser)])

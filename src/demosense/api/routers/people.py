@@ -4,14 +4,42 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from demosense.auth import current_active_person
+from demosense.auth import current_active_person, current_superuser
 from demosense.db import get_session
+from demosense.models.auth import RoleGrant
 from demosense.models.person import Membership, Person
 from demosense.schemas.person import PersonCreate, PersonRead
 from demosense.services.audit import log_action
 from demosense.services.rbac import require_admin_access, visible_org_units
 
 router = APIRouter(prefix="/people", tags=["people"])
+
+
+@router.get("", response_model=list[PersonRead], dependencies=[Depends(current_superuser)])
+async def list_people(
+    q: str | None = None,
+    pending_only: bool = False,
+    session: AsyncSession = Depends(get_session),
+):
+    """Superuser only - lists people to review/grant access to. `pending_only`
+    shows accounts with no role grant yet (registered but not yet approved
+    for anything). `q` substring-matches email/first_name/last_name.
+    """
+    stmt = select(Person)
+    if pending_only:
+        stmt = stmt.where(
+            ~Person.is_superuser,
+            ~select(RoleGrant.id).where(RoleGrant.person_id == Person.id).exists(),
+        )
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            Person.email.ilike(pattern)
+            | Person.first_name.ilike(pattern)
+            | Person.last_name.ilike(pattern)
+        )
+    stmt = stmt.order_by(Person.created_at.desc()).limit(200)
+    return list(await session.scalars(stmt))
 
 
 @router.get("/{person_id}", response_model=PersonRead)
